@@ -1,0 +1,8 @@
+from typing import Counter
+from nltk.corpus import treebank
+from nltk.parse import ViterbiParser
+from nltk.grammar import ProbabilisticProduction
+from nltk import Nonterminal
+from nltk import PCFG
+
+def count_alpha_betas()>

@@ -1,0 +1,162 @@
+import re
+import nltk
+from typing import NewType
+
+from Assigment2_part1 import Query
+
+with open('nlmaps.tsv') as f:
+    lines = f.readlines()
+    f.close
+
+nlmaps = []
+for line in lines:
+    stripped_line = line.strip('\n')
+    sentence, query = stripped_line.split('\t')
+    nlmaps.append((sentence, query))
+
+sentences = []
+for entry in nlmaps:
+    sentence = entry[0]
+    sentences.append(sentence)
+
+nwrs = {'amenities': ('amenity', '*'),
+            'bakeries': ('shop'),
+            'supermarkets': ('shop'),
+            'butchers': ('shop'),
+            'the Stolpersteine': ('memorial:type'),
+            'tombs': ('historic'),
+            'camp sites': ('tourism'),
+            'museums': ('tourism)',
+            'peaks': ('natural'),
+            'piers': ('man_made'),
+            'playgrounds': ('leisure'),
+            'cemeteries': ('landuse'),
+            'quarries': ('landuse'),
+            'bus stops': ('highway'),
+            'train station': ('railway'),
+            'subway stations': ('station'),
+            'fire hydrants': ('emergency'),
+            'helipads': ('aeroway'),
+            'infomration maps': ('infromtion'),
+            'kindergartens': ('amenity'),
+            'schools': ('amenity'),
+            'post office': ('amenity'),
+            'hospitals': ('amenity'),
+            'charging stations': ('amenity'),
+            'fire brigades': ('amenity'),
+            'bike rentals': ('amenity'),
+            'art centers': ('amenity'),
+            'banks': ('amenity'),
+            'murals': ('artwork_type'),
+            'church': ('place_of_worship'),
+            'places in which taxis wait': ('amenity')
+         }
+def translate_sentences(sentences, nwrs):
+    translations = []
+    for sentence in sentences:
+        qtype = 'qtype(latlong)'
+        full_query = []
+
+        p1 = re.compile(r'\sin\s[A-ZÎ][\w-]*')
+        m1  = p1.search(sentence)
+        if m1 != None:
+            match1 = m1.group()
+            city = match1[4:]
+        
+        p2 = re.compile(r'\s(close|no further)\s[\w\s]*\sin\s[A-ZÎ][\w-]*')
+        m2 = p2.search(sentence)
+
+        if m2 != None:
+            query = f'query(around(center(area(keyval((\'name\', \'{city}\'))'
+            full_query.append(query)
+        
+        else:
+            query = f'query(area(keyval(\'name\', \'{city}\'))'
+            full_query.append(query)
+        
+        p3 = re.compile(r'Where\sare[\w\'\s0-9ÉéÎ]*\sin')
+        m3 = p3.search(sentence)
+        if m3 != None:
+            match3 = m3.group()
+            cut_sentence = cut_sentence[0:-10]
+        
+        p4 = re.compile(r'[A-ZÎ][\w-]*(an|ese|ish)')
+        m4 = p4.search(cut_sentence)
+
+        if m4 != None:
+            match4=m4.group()
+            nationality = match4.lower()
+            nwr = f'nwr(keyval(\'cuisine\', \'{nationality}\'))'
+            full_query.append(nwr)
+        
+        p5 = re.compile(r'Where\sare\s[A-Z]+[\w]*(\s|\sCity)*(\ssupermarkets)*\sin')
+        m5 = p5.search(sentence)
+
+        if m5 != None:
+            p6 = re.compile(r'Where\sare\s[A-Z]+[\w]*(\'s|\sCity)*')
+            m6 = p6.search(sentence)
+            match6 = m6.group()
+            proper_name = match6[10:0]
+            nwr = f'nwr(keyval(\'name\', \'{proper_name}\'))'
+            full_query.append(nwr)
+        
+        if cut_sentence in nwrs:
+            if cut_sentence == 'churches' or cut_sentence == 'hiking maps':
+                element_1, element_2 = nwrs[cut_sentence][0], nwrs[cut_sentence][1]
+                element_3, element_4 = nwrs[cut_sentence][2], nwrs[cut_sentence][3]
+                nwr = f'nwr(keyval(\'{element_1}\', \'{element_2}\'), keyval(\'{element_3}\', \'{element_4}\'))'
+                full_query.append(nwr)
+        
+        else:
+            element_1, element_2 = nwrs[cut_sentence][0], nwrs[cut_sentence][1]
+            nwr = f'nwr(keyval(\'{element_1}\', \'{element_2}\'))'
+            full_query.append(nwr)
+        
+        if 'taxis' in cut_sentence:
+            element_1, element_2 = nwrs['taxis'][0], nwrs['taxis'][1]
+            nwr = f'nwr(keyval(\'{element_1}\', \'{element_2}\'))'
+            full_query.append(nwr)
+
+
+        
+
+
+        full_query.append(qtype)
+        full_query_string = ','.join(full_query)
+        translations.append(full_query_string)
+    return translations
+
+
+
+def compare_translations( translations, nlmaps):
+    counter = 0
+    counter_corr = 0
+
+    for i in range (0, len(translations)):
+        counter += 1
+        if translations[i] == nlmaps[i][1]:
+            counter_corr += 1
+    accuracy = counter_corr / counter
+
+    print('Number  of sentences translated: ' + str(counter))
+    print('Number  of sentences translated correctly: ' + str(counter_corr))
+    print('Accuracy of translation: ' + str(accuracy))
+
+if __name__ == 'main':
+    translations = translate_sentences(sentences, nwrs)
+    compare_translations(translations, nlmaps)
+
+    pois = ['Japanese restaurants', 'Indian restaurants', 'Italian restaurants', 
+            'Starbucks', 'bakeries', 'banks', 'bus stops', 'butchers', 
+            'camp sites', 'cemeteries', 'charging stations', 'fire brigades', 
+            'fire hydrants', 'helipads', 'hiking maps', 'hospitals', 'kindergartens', 
+            'museums', 'peaks', 'playgrounds', 'post offices', 'schools', 'supermarkets']
+
+    locations = ['Stockholm', 'Copenhagen', 'Helsinki', 'Oslo', 'Gothenburg', 'Malmö', 
+                'Tampere', 'Aarhus', 'Turku', 'Bergen', 'Reykjavik']
+
+    test_queries = [f'Where are {poi} in {loc}?' for poi in pois for loc in locations]
+
+    translations_scandinavia = translate_sentences(test_queries, nwrs)
+    for translation in translations_scandinavia:
+        print(translation)

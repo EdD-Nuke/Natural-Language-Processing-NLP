@@ -1,0 +1,165 @@
+import re
+import sys
+from types import ModuleType
+import nltk
+import stanza
+from nltk.parse.api import ParserI
+from nltk.sem.logic import Tokens
+from stanza.pipeline.core import Pipeline
+import argparse
+
+from bs4 import BeautifulSoup
+from urllib.request import urlopen
+
+stanza.download('en')
+stanza.download("nl")
+nlp = stanza.Pipeline('en')
+stanza.Pipeline(processors="tokenize,mwt,pos,lemma,depparse", lang="nl")
+
+def parse_arguments():
+    arg = argparse.ArgumentParser()
+    arg.add_argument('language', help='language of the input text')
+    arg.add_argument('-t', '--text', help='use the provided text instead f stdin')
+
+    mode_subp = arg.add_subparsers(required=True, title='modes', dest='mode')
+    mode_subp.add_parser('tokenize', help='tokenize and output word')
+
+    lemma_subp = mode_subp.add_parser('lemma', help='output lemma for every word')
+    lemma_subp.add_argument('-p', '--pos', help='POS-tag for lemma', action='store_true')
+    lemma_subp.add_argument('-w', '--words', help='show word for certain tag', action='store_true')
+
+    pos_subp = mode_subp.add_parser('pos', help='output pos-tag for word')
+    pos_subp.add_argument('-w', '--words', help='show word of tag', action='store_true')
+
+    mode_subp.add_parser('depparse', help='outputs dependency tree')
+    mode_subp.add_parser('deptree', help='output fromatted dep. tree')
+
+    return arg.parse_args()
+
+def get_input_text(arguments):
+    in_text = []
+    if arguments.text:
+        in_text.append(arguments.text) #if can append to dict
+    
+    else: #else try with an expection trouging if not succesfull
+        try:
+            for row in sys.stdin:
+                in_text.append(row)
+        except KeyboardInterrupt:
+            print('Error while reading stdin')
+            sys.exit()
+
+    return in_text
+
+def stan(language, processors):
+    stanza.download(lang=language, processors=processors) ## This downloads procs as the procs to the main-prg
+    return stanza.Pipeline(lang=language, processors=processors)
+
+
+################LATEX####################
+def latex_body(inner):
+    return f'''
+    \\documentclass{{article}}
+\\usepackage{{tikz-dependency}}
+\\begin{{document}}
+{inner}
+\\end{{document}}
+            '''
+def latex_deptree(edges):
+    text = latex_convert_to_text(edges)
+    edges = set(map(latex_word_to_depedge, edges))
+    converted_edges = '\n'.join(edges)
+    return f'''
+    \\begin{{dependency}}
+\\begin{{deptext}}[column sep=0.5cm]
+{text}
+\\end{{deptext}}
+{converted_edges}
+\\end{{dependency}}
+'''
+def latex_convert_to_text(words):
+    return ' \\& '.join(map(lambda word : word.text, words)) + ' \\\\'
+
+def latex_word_to_depedge(word):
+    if word.deprel == 'root':
+        return f'\\deproot{{{word.head}}}{{{word.id}}}{{{word.deprel}}}'
+##################END###################
+
+class Mode:
+    def __init__(self, arguments, modes):
+        self.arguments = arguments
+        self.inner_mode = modes[arguments.mode]
+        self.nlp = stan(arguments.language, processors=self.inner_mode.req)
+
+    def default_process(self, text):
+        doc = self.nlp.process(text)
+        iter = doc.iter_words()
+        mapped = map(lambda word : self.inner_mode.format_word(word, self.arguments), iter)
+
+        for word in mapped:
+            print(word)
+    def process(self, text):
+        return self.inner_mode.process(self, text)
+    
+class Token:
+    req = 'tokenize'
+    process = Mode.default_process
+    def format_word(word, _):
+        return f'{word.id}\t{word.text}'
+
+class POS:
+    req = 'pos, ' + Token.req
+    process = Mode.default_process
+    def format_word(word, arguments):
+        if arguments.words:
+            return f'{word.id} {word.text}\t{word.xpos}'
+        else:
+            return f'{word.id}\t{word.xpos}'
+    
+class Lemma:
+    req = 'lemma, mwt, ' + POS.req
+    process = Mode.default_process
+    def format_word(word, arguments):
+        left = [word.id]
+        right = [word.lemma]
+
+        if arguments.pos:
+            right.append(word.pos)
+        
+        if arguments.words:
+            left.append(word.text)
+        
+        return ' '.join(left) + '\t' + '_'.join(right)
+
+
+class Depparse:
+    req = 'depparse, ' + Lemma.req
+    process = Mode.default_process
+    def format_word(word, arguments):
+        return f'{word.id} <-\t{word.head} {word.deprel}'
+
+class Deptree:
+    req = Depparse.req
+
+    def process(self, text):
+        procs = self.nlp.process(text)
+
+        inners = []
+        for sentence in procs.sentences:
+            inner = latex_deptree(sentence.words)
+            inners.append(inner)
+        body = latex_body('\n'.join(inners))
+        print(body)
+modes = {
+    'pos': POS,
+    'lemma': Lemma,
+    'tokenize': Token,
+    'depparse': Depparse,
+    'deptree': Deptree,
+}
+
+arguments = parse_arguments()
+mode = Mode(arguments, modes)
+in_text = get_input_text(arguments)
+joined_text = '\n\n'.join(in_text)
+procs = mode.process(joined_text)

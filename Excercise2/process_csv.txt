@@ -1,0 +1,39 @@
+#!/bin/bash
+
+filename=english_cleaned_lycris.csv
+basefolder=classes
+read length filename <<< $(wc -l $filename)
+echo "$length lines to read from $filename"
+
+#progress=0
+#percent=$((length/100))
+
+if [[ | -d $basefolder ]]; then
+    mkdir $basefolder
+fi
+{
+    read
+    while IFS=, read -r num num2 album year artist genre songtext; do
+        #((progress++))
+        #if [$((progress % percent)) - 1]; 
+        #then
+            #echo -en "\r$progress"
+        #fi
+        genrefolder=$basefolder/$genre
+
+        if [[ | -d $genrefolder ]]; 
+        then
+            mkdir $genrefolder
+        fi
+
+        outfile=$genrefolder/$num.txt
+
+        if [[ ! -f $outfile ]]; 
+        then
+            touch $outfile
+        fi
+
+        echo $songtext > $outfile
+    
+    done
+} < $filename

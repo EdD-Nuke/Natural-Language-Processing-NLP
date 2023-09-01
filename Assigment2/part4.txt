@@ -1,0 +1,85 @@
+import nltk
+from nltk import grammar, parse
+
+g = grammar.FeatureGrammar.fromstring("""
+## Non-terminals
+# Sentence:
+S -> NP VP
+
+# Verb Phrase
+VP -> IVerb
+VP -> IVerb PP
+VP -> TVerb [tense='past'] NP
+VP -> TVerb [tense='past'] NP PP
+
+VP -> TVerb [tense='pres', num='sg'] NP[num='sg']
+VP -> TVerb [tense='pres', num='sg'] NP[num='sg'] PP
+
+# Noun Phrase
+NP[num='sg', loc='other'] -> Det[phon='c'] Nom[phon='c', num='sg', loc='other']
+NP[num='sg', loc='other'] -> Det[phon='v'] Nom[phon='v', num='sg', loc='other']
+NP[num='sg', loc='other'] -> PropN[num='sg']
+NP[num='sg', loc='on'] -> Det[phon='c'] Nom[phon='c', loc='on']
+NP[num='sg', loc='on'] -> Det[phon='c'] Nom[phon='c'] PP[loc='on']
+NP[num='sg', loc='in'] -> Det[phon='c'] Nom[phon='c', loc='in']
+NP[num='sg', loc='in'] -> Det[phon='c'] Nom[phon='c'] PP[loc='in']
+
+
+# Prepositional Phrase
+PP[loc='in'] -> P[loc='in'] NP[num='sg', loc='in']
+PP[loc='on'] -> P[loc='on'] NP[num='sg', loc='on']
+
+## Terminals a.k.a. Lexicon
+# Verbs
+IVerb[tense='past'] -> 'walked'
+TVerb[tense='past'] -> 'saw' | 'ate' | 'chased'
+TVerb[tense='pres', num='pl'] -> 'see' | 'chase'
+TVerb[tense='pres', num='sg'] -> 'sees'
+
+# Determiners
+Det[loc='c'] -> 'the' | 'a'
+Det[loc='v'] -> 'the' | 'an'
+
+## Nominals
+Nom[phon='c', num='sg', loc='other'] -> 'dog' | 'man' | 'garden' | 'grass' | 'lunatic' | 'cat'
+Nom[phon='v', num='sg', loc='in'] -> 'apple'
+Nom[phon='c', num='sg', loc='on'] -> grass
+Nom[phon='v', num='sg'] -> 'apple'
+PropN[num='sg'] -> 'Mehdi'
+
+# Preposition
+P[loc='in'] -> 'in'
+P[loc='on'] -> 'on'
+
+""")
+
+parser = parse.FeatureEarleyChartParser(g)
+
+## Modify the grammar above to account for grammatical/ungrammatical sentences
+sentences = [
+    # grammatical
+    "Mehdi walked in the garden",
+    "Mehdi sees the lunatic on the grass",
+    "a dog chased a cat",
+    "a lunatic ate an apple",
+    # ungrammatical
+    "Mehdi see the lunatic in the garden",
+    "Mehdi saw the lunatic in the grass",
+    "a dog chase a cat",
+    "a lunatic ate a apple",
+]
+
+for raw in sentences:
+    print("====")
+    print(raw)
+    sentence = raw.split()  # tokenize
+    trees = parser.parse(sentence)
+    count = 0
+    for tree in trees:
+        count += 1
+        print(count, tree)
+        #tree.draw()
+        print("----")
+    if count == 0:
+        # there shouldn't be any parse tree for ungrammatical sentences.
+        print('THERE IS NO PARSE TREE!')
